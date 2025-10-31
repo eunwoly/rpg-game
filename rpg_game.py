@@ -7,44 +7,43 @@ from copy import deepcopy
 # 1. 초기 세션 상태 및 데이터 설정
 # -----------------
 
-# 세션 상태가 초기화되지 않았을 때만 초기화
-if 'game_started' not in st.session_state:
-    st.session_state.game_started = False
-if 'player_name' not in st.session_state:
-    st.session_state.player_name = ""
-    
-# 현재 위치
-if 'location' not in st.session_state:
-    st.session_state.location = 'village'
-# 인벤토리 (초기값은 0, 1개 이상 획득해야 표시됨)
-if 'inventory' not in st.session_state:
-    st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
+# 📌 [수정] 세션 초기화를 함수로 분리하여 명확하게 관리
+def initialize_session():
+    if 'game_started' not in st.session_state:
+        st.session_state.game_started = False
+        st.session_state.player_name = ""
+        st.session_state.location = 'village'
+        
+        # 인벤토리 (초기값은 0, 1개 이상 획득해야 표시됨)
+        st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
 
-# 스탯 초기화
-if 'stats' not in st.session_state:
-    st.session_state.stats = {
-        'HP': 10,
-        'STR': 3,
-        'DEX': 5,
-        'MP': 5,
-        'MANA': 0
-    }
-    
-# 레벨, 경험치, 명성 초기화
-if 'level' not in st.session_state:
-    st.session_state.level = 1
-if 'exp' not in st.session_state:
-    st.session_state.exp = 0
-if 'fame' not in st.session_state:
-    st.session_state.fame = 0
+        # 스탯 초기화
+        st.session_state.stats = {
+            'HP': 10,
+            'STR': 3,
+            'DEX': 5,
+            'MP': 5,
+            'MANA': 0
+        }
+        st.session_state.max_hp = 10 # 📌 최대 체력 변수 추가 (휴식용)
+        
+        # 레벨, 경험치, 명성 초기화
+        st.session_state.level = 1
+        st.session_state.exp = 0
+        st.session_state.fame = 0
 
-st.session_state.player_class = "농노 (Peasant)"
-if 'is_combat_active' not in st.session_state:
-    st.session_state.is_combat_active = False
-if 'enemy' not in st.session_state:
-    st.session_state.enemy = None
-if 'combat_log' not in st.session_state:
-    st.session_state.combat_log = []
+        st.session_state.player_class = "농노 (Peasant)"
+        st.session_state.is_combat_active = False
+        st.session_state.enemy = None
+        st.session_state.combat_log = []
+        
+        # 📌 [추가] 1회성 메시지 표시용
+        if 'last_message' not in st.session_state:
+            st.session_state.last_message = None
+
+# 최초 실행 시 세션 초기화
+initialize_session()
+
 
 # 몬스터 데이터 정의
 ENEMIES = {
@@ -103,7 +102,8 @@ def harvest_wheat():
         time.sleep(3) 
         
     st.session_state.inventory['밀'] += 1
-    st.success(f"✅ 밀 1개를 수확했습니다! (총 {st.session_state.inventory['밀']}개)")
+    # 📌 [수정] 성공 메시지를 세션에 저장하고 새로고침
+    st.session_state.last_message = f"✅ 밀 1개를 수확했습니다! (총 {st.session_state.inventory['밀']}개)"
     st.rerun() 
 
 def display_sidebar():
@@ -121,7 +121,7 @@ def display_sidebar():
     
     # 캐릭터 스탯 표시
     st.sidebar.subheader("능력치")
-    st.sidebar.text(f"체력: {st.session_state.stats['HP']}")
+    st.sidebar.text(f"체력: {st.session_state.stats['HP']} / {st.session_state.max_hp}") # 최대 체력 표시
     st.sidebar.text(f"힘: {st.session_state.stats['STR']}")
     st.sidebar.text(f"민첩: {st.session_state.stats['DEX']}")
     st.sidebar.text(f"정신력: {st.session_state.stats['MP']}")
@@ -133,25 +133,17 @@ def display_sidebar():
     # 1개 이상 획득한 아이템만 표시
     for item in sorted(st.session_state.inventory.keys()):
         count = st.session_state.inventory[item]
-        if count > 0: # 개수가 1개 이상인 아이템만 표시
+        if count > 0: 
             st.sidebar.write(f"- {item}: **{count}**개")
         
     st.sidebar.markdown("---")
     
-    # 게임 초기화 버튼
+    # 📌 [수정] 게임 초기화 버튼 (가장 확실한 '전체 삭제' 방식)
     if st.sidebar.button("<< 게임 초기화"):
-        st.session_state.game_started = False
-        st.session_state.player_name = ""
-        st.session_state.location = 'village'
-        st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
-        st.session_state.stats = {'HP': 10, 'STR': 3, 'DEX': 5, 'MP': 5, 'MANA': 0}
-        st.session_state.level = 1
-        st.session_state.exp = 0
-        st.session_state.fame = 0
-        st.session_state.is_combat_active = False
-        st.session_state.enemy = None
-        st.session_state.combat_log = []
-        st.rerun() 
+        # 세션 상태의 모든 키를 삭제
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun() # 앱을 강제로 새로고침하여 initialize_session()을 다시 실행
 
 # -----------------
 # 3. 전투 시스템 함수 (Combat Logic)
@@ -188,7 +180,6 @@ def start_combat(enemy_type):
 def player_attack():
     """플레이어가 몬스터를 공격합니다. 전투 중일 때만 실행됩니다."""
     
-    # 전투가 활성화되지 않았으면 즉시 종료
     if not st.session_state.is_combat_active:
         return 
         
@@ -199,15 +190,11 @@ def player_attack():
     enemy['HP'] = max(0, enemy['HP'] - damage)
     st.session_state.combat_log.append(f"**{st.session_state.player_name}**이(가) **{enemy['name']}**에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {enemy['HP']})")
     
-    # 📌 [수정] 전투 승리 체크: 승리 시 end_combat 호출 후 함수 종료
     if enemy['HP'] <= 0:
         end_combat("win")
-        # end_combat에서 위치가 변경되므로, 여기서 공격 함수를 완전히 종료합니다.
         return
     
-    # 플레이어 공격 후, 몬스터 턴 실행
     enemy_turn()
-    # 몬스터 턴 후, 플레이어가 죽었으면 추가 공격/턴을 막기 위해 함수 종료
     if st.session_state.stats['HP'] <= 0:
         return
         
@@ -225,14 +212,12 @@ def enemy_turn():
     st.session_state.stats['HP'] = max(0, st.session_state.stats['HP'] - damage)
     st.session_state.combat_log.append(f"**{enemy['name']}**이(가) 당신에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {st.session_state.stats['HP']})")
     
-    # 전투 패배 체크
     if st.session_state.stats['HP'] <= 0:
         end_combat("lose")
         return
 
 def end_combat(result):
     """전투를 종료하고 결과를 처리합니다."""
-    # is_combat_active를 False로 설정하여 버튼이 비활성화되도록 유도
     st.session_state.is_combat_active = False 
     
     if result == "win":
@@ -256,9 +241,13 @@ def end_combat(result):
         
     elif result == "lose":
         st.session_state.combat_log.append("💀 **전투에서 패배했습니다...** 💀")
-        st.session_state.combat_log.append("당신은 정신을 잃고 마을로 돌아왔습니다.")
+        # 📌 [수정] 0 HP 소프트락 버그 수정
+        st.session_state.stats['HP'] = st.session_state.max_hp
+        st.session_state.combat_log.append("당신은 정신을 잃고 마을로 돌아와 기력을 회복했습니다.")
     
     go_to_location('village')
+    # 📌 [수정] 전투 종료 후 즉시 마을로 이동하도록 강제 새로고침
+    st.rerun()
 
 # -----------------
 # 4. 화면 구성 함수 (각 위치별 화면)
@@ -308,6 +297,11 @@ def farm_screen():
     st.title("🌾 공동 농장")
     st.header("밀을 수확할 시간입니다.")
     st.markdown("---")
+    
+    # 📌 [수정] 1회성 성공 메시지 표시
+    if st.session_state.last_message:
+        st.success(st.session_state.last_message)
+        st.session_state.last_message = None # 메시지 표시 후 삭제
     
     st.write("황무지 같은 밭에는 당신이 오늘 수확해야 할 밀들이 힘없이 서 있습니다.")
     st.write(f"현재 당신의 노고로 모인 밀: **{st.session_state.inventory['밀']}**개")
@@ -387,6 +381,7 @@ def main_game_loop():
     if st.session_state.game_started:
         display_sidebar()
         
+        # 📌 [수정] 전투 상태 확인을 가장 먼저
         if st.session_state.is_combat_active:
             combat_screen() 
         elif st.session_state.location == 'village':
