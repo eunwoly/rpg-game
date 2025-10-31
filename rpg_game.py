@@ -17,11 +17,13 @@ if 'location' not in st.session_state:
 if 'inventory' not in st.session_state:
     st.session_state.inventory = {'밀': 0}
 
-# 📌 새로 추가된 캐릭터 스탯 초기화
+# 📌 캐릭터 스탯 초기화 (정신력, 마나 추가됨)
 if 'stats' not in st.session_state:
     st.session_state.stats = {
-        'HP': 10, # 체력 (Health Points)
-        'STR': 5  # 힘 (Strength)
+        'HP': 10,   # 체력 (Health Points)
+        'STR': 5,   # 힘 (Strength)
+        'MP': 10,   # 정신력 (Mental Power)
+        'MANA': 0   # 마나 (Mana) - 요청에 따라 0으로 초기화
     }
     
 # 직업 고정 (플레이어에게는 비공개)
@@ -64,10 +66,13 @@ def display_sidebar():
     
     st.sidebar.markdown("---")
     
-    # 📌 캐릭터 스탯 표시
+    # 📌 캐릭터 스탯 표시 (정신력, 마나 추가됨)
     st.sidebar.subheader("능력치")
     st.sidebar.text(f"체력 (HP): {st.session_state.stats['HP']}")
     st.sidebar.text(f"힘 (STR): {st.session_state.stats['STR']}")
+    st.sidebar.text(f"정신력 (MP): {st.session_state.stats['MP']}")
+    st.sidebar.text(f"마나 (MANA): {st.session_state.stats['MANA']}")
+
     
     st.sidebar.markdown("---")
     
@@ -83,8 +88,8 @@ def display_sidebar():
         st.session_state.player_name = ""
         st.session_state.location = 'village'
         st.session_state.inventory = {'밀': 0}
-        # 스탯 초기화 추가
-        st.session_state.stats = {'HP': 10, 'STR': 5} 
+        # 📌 스탯 초기화에 정신력, 마나 추가
+        st.session_state.stats = {'HP': 10, 'STR': 5, 'MP': 10, 'MANA': 0} 
         st.rerun()
 
 # -----------------
