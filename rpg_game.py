@@ -10,13 +10,18 @@ from copy import deepcopy
 # 세션 상태가 초기화되지 않았을 때만 초기화
 if 'game_started' not in st.session_state:
     st.session_state.game_started = False
+if 'player_name' not in st.session_state:
     st.session_state.player_name = ""
-    st.session_state.location = 'village'
     
-    # 인벤토리 (초기값은 0, 1개 이상 획득해야 표시됨)
+# 현재 위치
+if 'location' not in st.session_state:
+    st.session_state.location = 'village'
+# 인벤토리 (초기값은 0, 1개 이상 획득해야 표시됨)
+if 'inventory' not in st.session_state:
     st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
 
-    # 스탯 초기화
+# 스탯 초기화
+if 'stats' not in st.session_state:
     st.session_state.stats = {
         'HP': 10,
         'STR': 3,
@@ -25,14 +30,20 @@ if 'game_started' not in st.session_state:
         'MANA': 0
     }
     
-    # 레벨, 경험치, 명성 초기화
+# 레벨, 경험치, 명성 초기화
+if 'level' not in st.session_state:
     st.session_state.level = 1
+if 'exp' not in st.session_state:
     st.session_state.exp = 0
+if 'fame' not in st.session_state:
     st.session_state.fame = 0
 
-    st.session_state.player_class = "농노 (Peasant)"
+st.session_state.player_class = "농노 (Peasant)"
+if 'is_combat_active' not in st.session_state:
     st.session_state.is_combat_active = False
+if 'enemy' not in st.session_state:
     st.session_state.enemy = None
+if 'combat_log' not in st.session_state:
     st.session_state.combat_log = []
 
 # 몬스터 데이터 정의
@@ -52,7 +63,10 @@ ENEMIES = {
 # -----------------
 
 def get_health_bar(current_hp, max_hp, length=10):
-    """📌 몬스터 체력을 이모지 막대바로 시각화합니다."""
+    """몬스터 체력을 이모지 막대바로 시각화합니다."""
+    # 체력이 0보다 작을 경우를 방지
+    current_hp = max(0, current_hp) 
+    
     percent = current_hp / max_hp
     filled_blocks = int(length * percent)
     empty_blocks = length - filled_blocks
@@ -118,27 +132,60 @@ def display_sidebar():
     st.sidebar.markdown("---")
     
     st.sidebar.title("💰 인벤토리")
-    # 📌 1개 이상 획득한 아이템만 표시
+    # 1개 이상 획득한 아이템만 표시
     for item in sorted(st.session_state.inventory.keys()):
         count = st.session_state.inventory[item]
         if count > 0: # 개수가 1개 이상인 아이템만 표시
             st.sidebar.write(f"- {item}: **{count}**개")
         
     st.sidebar.markdown("---")
-    # 게임 초기화 버튼
+    
+    # 📌 게임 초기화 버튼 (안정화된 방식: 초기값 명시적 재할당)
     if st.sidebar.button("<< 게임 초기화"):
-        # 초기화 로직 (session_state를 삭제하는 대신, 초기값으로 재설정)
-        keys_to_reset = ['game_started', 'player_name', 'location', 'inventory', 'stats', 
-                         'level', 'exp', 'fame', 'is_combat_active', 'enemy', 'combat_log']
-        for key in keys_to_reset:
-            if key in st.session_state:
-                del st.session_state[key]
-        
+        st.session_state.game_started = False
+        st.session_state.player_name = ""
+        st.session_state.location = 'village'
+        st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
+        st.session_state.stats = {'HP': 10, 'STR': 3, 'DEX': 5, 'MP': 5, 'MANA': 0}
+        st.session_state.level = 1
+        st.session_state.exp = 0
+        st.session_state.fame = 0
+        st.session_state.is_combat_active = False
+        st.session_state.enemy = None
+        st.session_state.combat_log = []
         st.rerun() 
 
 # -----------------
 # 3. 전투 시스템 함수 (Combat Logic)
 # -----------------
+
+def start_combat(enemy_type):
+    """지정된 몬스터와의 전투를 시작합니다."""
+    st.session_state.is_combat_active = True
+    st.session_state.location = 'combat'
+    
+    enemy_base_stats = ENEMIES[enemy_type]
+    st.session_state.enemy = deepcopy({
+        "type": enemy_type,
+        "name": enemy_base_stats["NAME"],
+        "HP": enemy_base_stats["HP"],
+        "STR": enemy_base_stats["STR"],
+        "DEX": enemy_base_stats["DEX"],
+        "MAX_HP": enemy_base_stats["HP"],
+        "EXP_REWARD": enemy_base_stats["EXP_REWARD"],
+        "ITEM_REWARD": enemy_base_stats["ITEM_REWARD"]
+    })
+    
+    st.session_state.combat_log = [f"**⚔️ {st.session_state.enemy['name']}**과의 전투가 시작되었습니다!"]
+    
+    player_dex = st.session_state.stats['DEX']
+    enemy_dex = st.session_state.enemy['DEX']
+    
+    if player_dex >= enemy_dex:
+        st.session_state.combat_log.append("당신의 민첩이 더 높아 선제 공격 권한을 얻었습니다! 먼저 행동하세요.")
+    else:
+        st.session_state.combat_log.append(f"{st.session_state.enemy['name']}의 민첩({enemy_dex})이 당신({player_dex})보다 높아 선제 공격을 시작합니다!")
+        enemy_turn()
 
 def player_attack():
     """플레이어가 몬스터를 공격합니다."""
@@ -295,7 +342,7 @@ def combat_screen():
     # 몬스터 상태 표시 및 이모지 체력바
     st.subheader(f"몬스터: {enemy['name']}")
     
-    # 📌 이모지 체력바 표시
+    # 이모지 체력바 표시
     hp_bar = get_health_bar(enemy['HP'], enemy['MAX_HP'], length=15)
     st.markdown(f"**{hp_bar}** ({enemy['HP']} / {enemy['MAX_HP']})")
     
