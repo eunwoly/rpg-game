@@ -13,7 +13,7 @@ if 'game_started' not in st.session_state:
     st.session_state.player_name = ""
     st.session_state.location = 'village'
     
-    # 인벤토리 (슬라임의 점액 추가)
+    # 인벤토리 (초기값은 0, 1개 이상 획득해야 표시됨)
     st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
 
     # 스탯 초기화
@@ -28,7 +28,7 @@ if 'game_started' not in st.session_state:
     # 레벨, 경험치, 명성 초기화
     st.session_state.level = 1
     st.session_state.exp = 0
-    st.session_state.fame = 0 # 📌 명성 추가
+    st.session_state.fame = 0
 
     st.session_state.player_class = "농노 (Peasant)"
     st.session_state.is_combat_active = False
@@ -43,7 +43,7 @@ ENEMIES = {
         "DEX": 3,
         "NAME": "LV.1 슬라임",
         "EXP_REWARD": 1,
-        "ITEM_REWARD": "슬라임의 점액" # 📌 아이템 보상 정의
+        "ITEM_REWARD": "슬라임의 점액"
     }
 }
 
@@ -51,9 +51,29 @@ ENEMIES = {
 # 2. 유틸리티 함수 및 사이드바
 # -----------------
 
+def get_health_bar(current_hp, max_hp, length=10):
+    """📌 몬스터 체력을 이모지 막대바로 시각화합니다."""
+    percent = current_hp / max_hp
+    filled_blocks = int(length * percent)
+    empty_blocks = length - filled_blocks
+    
+    # 체력 이모지 (녹색 막대)와 빈 이모지 (회색 막대) 사용
+    bar = "🟢" * filled_blocks + "⚪" * empty_blocks
+    return bar
+
+def get_slime_loot():
+    """슬라임 점액 보상을 확률에 따라 계산합니다."""
+    rand = random.random()
+    
+    if rand < 0.6: # 60% 확률
+        return 1
+    elif rand < 0.9: # 30% 확률
+        return 2
+    else: # 10% 확률
+        return 3
+
 def start_game():
     """사용자가 '모험 시작' 버튼을 누르면 호출됩니다."""
-    # 📌 이름이 비어 있는지 확인 (st.session_state.player_name은 text_input의 key로 자동 업데이트됨)
     if not st.session_state.player_name.strip():
         st.warning("캐릭터 이름을 입력해야 합니다.")
         return
@@ -83,11 +103,11 @@ def display_sidebar():
     # 레벨, 경험치, 명성 표시
     st.sidebar.text(f"레벨: {st.session_state.level}")
     st.sidebar.text(f"경험치: {st.session_state.exp}")
-    st.sidebar.text(f"명성: {st.session_state.fame}") # 📌 명성 표시
+    st.sidebar.text(f"명성: {st.session_state.fame}") 
     
     st.sidebar.markdown("---")
     
-    # 캐릭터 스탯 표시 (순서 변경 및 영어 제거)
+    # 캐릭터 스탯 표시
     st.sidebar.subheader("능력치")
     st.sidebar.text(f"체력: {st.session_state.stats['HP']}")
     st.sidebar.text(f"힘: {st.session_state.stats['STR']}")
@@ -98,10 +118,11 @@ def display_sidebar():
     st.sidebar.markdown("---")
     
     st.sidebar.title("💰 인벤토리")
-    # 인벤토리 항목을 키를 기준으로 정렬하여 표시 (밀 -> 점액 순)
+    # 📌 1개 이상 획득한 아이템만 표시
     for item in sorted(st.session_state.inventory.keys()):
         count = st.session_state.inventory[item]
-        st.sidebar.write(f"- {item}: **{count}**개")
+        if count > 0: # 개수가 1개 이상인 아이템만 표시
+            st.sidebar.write(f"- {item}: **{count}**개")
         
     st.sidebar.markdown("---")
     # 게임 초기화 버튼
@@ -113,51 +134,11 @@ def display_sidebar():
             if key in st.session_state:
                 del st.session_state[key]
         
-        # 강제 재실행을 통해 초기 세션 상태 설정 블록이 다시 실행되도록 유도
         st.rerun() 
 
 # -----------------
 # 3. 전투 시스템 함수 (Combat Logic)
 # -----------------
-
-def get_slime_loot():
-    """슬라임 점액 보상을 확률에 따라 계산합니다."""
-    rand = random.random() # 0.0 이상 1.0 미만의 난수
-    
-    if rand < 0.6: # 60% 확률
-        return 1
-    elif rand < 0.9: # 30% 확률 (0.6 ~ 0.9)
-        return 2
-    else: # 10% 확률 (0.9 ~ 1.0)
-        return 3
-
-def start_combat(enemy_type):
-    """지정된 몬스터와의 전투를 시작합니다."""
-    st.session_state.is_combat_active = True
-    st.session_state.location = 'combat'
-    
-    enemy_base_stats = ENEMIES[enemy_type]
-    st.session_state.enemy = deepcopy({
-        "type": enemy_type,
-        "name": enemy_base_stats["NAME"],
-        "HP": enemy_base_stats["HP"],
-        "STR": enemy_base_stats["STR"],
-        "DEX": enemy_base_stats["DEX"],
-        "MAX_HP": enemy_base_stats["HP"],
-        "EXP_REWARD": enemy_base_stats["EXP_REWARD"],
-        "ITEM_REWARD": enemy_base_stats["ITEM_REWARD"]
-    })
-    
-    st.session_state.combat_log = [f"**⚔️ {st.session_state.enemy['name']}**과의 전투가 시작되었습니다!"]
-    
-    player_dex = st.session_state.stats['DEX']
-    enemy_dex = st.session_state.enemy['DEX']
-    
-    if player_dex >= enemy_dex:
-        st.session_state.combat_log.append("당신의 민첩이 더 높아 선제 공격 권한을 얻었습니다! 먼저 행동하세요.")
-    else:
-        st.session_state.combat_log.append(f"{st.session_state.enemy['name']}의 민첩({enemy_dex})이 당신({player_dex})보다 높아 선제 공격을 시작합니다!")
-        enemy_turn()
 
 def player_attack():
     """플레이어가 몬스터를 공격합니다."""
@@ -208,11 +189,11 @@ def end_combat(result):
         st.session_state.exp += exp_gain
         st.session_state.combat_log.append(f"🌟 경험치 {exp_gain}을 획득했습니다! (총 {st.session_state.exp})")
         
-        # 📌 명성 획득 로직
+        # 명성 획득 로직
         st.session_state.fame += 1
         st.session_state.combat_log.append(f"👑 명성 +1을 획득했습니다! (총 {st.session_state.fame})")
         
-        # 📌 슬라임의 점액 보상 로직
+        # 슬라임의 점액 보상 로직
         if st.session_state.enemy["type"] == "Slime":
             item_name = st.session_state.enemy["ITEM_REWARD"]
             item_count = get_slime_loot()
@@ -231,11 +212,10 @@ def end_combat(result):
 
 def character_setup_screen():
     """게임 시작 전 캐릭터 이름 설정을 위한 화면입니다."""
-    st.title("📜 감동적인 RPG: 여정의 시작") # 📌 타이틀 수정
+    st.title("📜 감동적인 RPG: 여정의 시작")
     st.markdown("---")
     st.header("귀하의 이름을 입력해 주십시오.")
 
-    # 📌 이름 입력 필드: key를 사용하여 st.session_state에 직접 연결
     st.text_input("이름", 
                   key='player_name',
                   placeholder="예: 존, 마리아...")
@@ -312,10 +292,13 @@ def combat_screen():
     st.title(f"🔥 전투 중: {enemy['name']}")
     st.markdown("---")
     
-    # 몬스터 상태 표시 (체력바는 편의 기능으로 유지)
+    # 몬스터 상태 표시 및 이모지 체력바
     st.subheader(f"몬스터: {enemy['name']}")
-    hp_percent = (enemy['HP'] / enemy['MAX_HP']) if enemy['MAX_HP'] > 0 else 0
-    st.progress(hp_percent, text=f"HP: {enemy['HP']} / {enemy['MAX_HP']}")
+    
+    # 📌 이모지 체력바 표시
+    hp_bar = get_health_bar(enemy['HP'], enemy['MAX_HP'], length=15)
+    st.markdown(f"**{hp_bar}** ({enemy['HP']} / {enemy['MAX_HP']})")
+    
     st.text(f"힘(공격력): {enemy['STR']} | 민첩(공격속도): {enemy['DEX']}")
     
     st.markdown("---")
