@@ -7,53 +7,43 @@ from copy import deepcopy
 # 1. 초기 세션 상태 및 데이터 설정
 # -----------------
 
+# 세션 상태가 초기화되지 않았을 때만 초기화
 if 'game_started' not in st.session_state:
     st.session_state.game_started = False
-if 'player_name' not in st.session_state:
     st.session_state.player_name = ""
-    
-# 현재 위치
-if 'location' not in st.session_state:
     st.session_state.location = 'village'
-# 인벤토리
-if 'inventory' not in st.session_state:
-    st.session_state.inventory = {'밀': 0}
+    
+    # 인벤토리 (슬라임의 점액 추가)
+    st.session_state.inventory = {'밀': 0, '슬라임의 점액': 0}
 
-# 📌 수정된 캐릭터 스탯 초기화
-if 'stats' not in st.session_state:
+    # 스탯 초기화
     st.session_state.stats = {
         'HP': 10,
-        'STR': 3,   # 힘 3으로 변경
-        'DEX': 5,   # 민첩 5 추가
-        'MP': 5,    # 정신력 5로 변경
+        'STR': 3,
+        'DEX': 5,
+        'MP': 5,
         'MANA': 0
     }
     
-# 📌 레벨과 경험치 추가
-if 'level' not in st.session_state:
+    # 레벨, 경험치, 명성 초기화
     st.session_state.level = 1
-if 'exp' not in st.session_state:
     st.session_state.exp = 0
+    st.session_state.fame = 0 # 📌 명성 추가
 
-st.session_state.player_class = "농노 (Peasant)" 
-
-# 전투 상태 관련 변수 초기화
-if 'is_combat_active' not in st.session_state:
+    st.session_state.player_class = "농노 (Peasant)"
     st.session_state.is_combat_active = False
-if 'enemy' not in st.session_state:
     st.session_state.enemy = None
-if 'combat_log' not in st.session_state:
     st.session_state.combat_log = []
-
 
 # 몬스터 데이터 정의
 ENEMIES = {
     "Slime": {
         "HP": 10,
-        "STR": 2,  # 공격력 (랜덤 대미지 최대치)
-        "DEX": 3,  # 공격 속도
+        "STR": 2, 
+        "DEX": 3,
         "NAME": "LV.1 슬라임",
-        "EXP_REWARD": 1 # 📌 경험치 보상 추가
+        "EXP_REWARD": 1,
+        "ITEM_REWARD": "슬라임의 점액" # 📌 아이템 보상 정의
     }
 }
 
@@ -63,8 +53,8 @@ ENEMIES = {
 
 def start_game():
     """사용자가 '모험 시작' 버튼을 누르면 호출됩니다."""
-    # 📌 이름 출력 문제 해결을 위해 공백 체크를 더 엄격하게 유지
-    if not st.session_state.player_name or not st.session_state.player_name.strip():
+    # 📌 이름이 비어 있는지 확인 (st.session_state.player_name은 text_input의 key로 자동 업데이트됨)
+    if not st.session_state.player_name.strip():
         st.warning("캐릭터 이름을 입력해야 합니다.")
         return
     st.session_state.game_started = True
@@ -89,13 +79,15 @@ def display_sidebar():
     st.sidebar.title("캐릭터 정보")
     st.sidebar.text(f"이름: {st.session_state.player_name}")
     st.sidebar.text("신분: 농노")
-    # 📌 레벨과 경험치 추가
+    
+    # 레벨, 경험치, 명성 표시
     st.sidebar.text(f"레벨: {st.session_state.level}")
     st.sidebar.text(f"경험치: {st.session_state.exp}")
+    st.sidebar.text(f"명성: {st.session_state.fame}") # 📌 명성 표시
     
     st.sidebar.markdown("---")
     
-    # 📌 캐릭터 스탯 표시 (순서 변경 및 영어 제거)
+    # 캐릭터 스탯 표시 (순서 변경 및 영어 제거)
     st.sidebar.subheader("능력치")
     st.sidebar.text(f"체력: {st.session_state.stats['HP']}")
     st.sidebar.text(f"힘: {st.session_state.stats['STR']}")
@@ -106,35 +98,44 @@ def display_sidebar():
     st.sidebar.markdown("---")
     
     st.sidebar.title("💰 인벤토리")
-    for item, count in st.session_state.inventory.items():
+    # 인벤토리 항목을 키를 기준으로 정렬하여 표시 (밀 -> 점액 순)
+    for item in sorted(st.session_state.inventory.keys()):
+        count = st.session_state.inventory[item]
         st.sidebar.write(f"- {item}: **{count}**개")
         
     st.sidebar.markdown("---")
     # 게임 초기화 버튼
     if st.sidebar.button("<< 게임 초기화"):
-        st.session_state.game_started = False
-        st.session_state.player_name = ""
-        st.session_state.location = 'village'
-        st.session_state.inventory = {'밀': 0}
-        st.session_state.stats = {'HP': 10, 'STR': 3, 'MP': 5, 'MANA': 0, 'DEX': 5}
-        # 📌 레벨과 경험치 초기화
-        st.session_state.level = 1
-        st.session_state.exp = 0
-        st.session_state.is_combat_active = False 
-        st.session_state.enemy = None
-        st.session_state.combat_log = []
-        st.rerun()
+        # 초기화 로직 (session_state를 삭제하는 대신, 초기값으로 재설정)
+        keys_to_reset = ['game_started', 'player_name', 'location', 'inventory', 'stats', 
+                         'level', 'exp', 'fame', 'is_combat_active', 'enemy', 'combat_log']
+        for key in keys_to_reset:
+            if key in st.session_state:
+                del st.session_state[key]
+        
+        # 강제 재실행을 통해 초기 세션 상태 설정 블록이 다시 실행되도록 유도
+        st.rerun() 
 
 # -----------------
 # 3. 전투 시스템 함수 (Combat Logic)
 # -----------------
+
+def get_slime_loot():
+    """슬라임 점액 보상을 확률에 따라 계산합니다."""
+    rand = random.random() # 0.0 이상 1.0 미만의 난수
+    
+    if rand < 0.6: # 60% 확률
+        return 1
+    elif rand < 0.9: # 30% 확률 (0.6 ~ 0.9)
+        return 2
+    else: # 10% 확률 (0.9 ~ 1.0)
+        return 3
 
 def start_combat(enemy_type):
     """지정된 몬스터와의 전투를 시작합니다."""
     st.session_state.is_combat_active = True
     st.session_state.location = 'combat'
     
-    # 몬스터 스탯 초기화 (원본 데이터에 영향을 주지 않기 위해 deepcopy 사용)
     enemy_base_stats = ENEMIES[enemy_type]
     st.session_state.enemy = deepcopy({
         "type": enemy_type,
@@ -143,12 +144,12 @@ def start_combat(enemy_type):
         "STR": enemy_base_stats["STR"],
         "DEX": enemy_base_stats["DEX"],
         "MAX_HP": enemy_base_stats["HP"],
-        "EXP_REWARD": enemy_base_stats["EXP_REWARD"]
+        "EXP_REWARD": enemy_base_stats["EXP_REWARD"],
+        "ITEM_REWARD": enemy_base_stats["ITEM_REWARD"]
     })
     
     st.session_state.combat_log = [f"**⚔️ {st.session_state.enemy['name']}**과의 전투가 시작되었습니다!"]
     
-    # 선제 공격 판정
     player_dex = st.session_state.stats['DEX']
     enemy_dex = st.session_state.enemy['DEX']
     
@@ -164,7 +165,6 @@ def player_attack():
     player_str = st.session_state.stats['STR']
     enemy = st.session_state.enemy
     
-    # 📌 힘을 최대치로 하는 1 ~ STR 사이의 랜덤 피해량 적용
     damage = random.randint(1, player_str)
     enemy['HP'] = max(0, enemy['HP'] - damage)
     st.session_state.combat_log.append(f"**{st.session_state.player_name}**이(가) **{enemy['name']}**에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {enemy['HP']})")
@@ -182,13 +182,11 @@ def enemy_turn():
     
     enemy = st.session_state.enemy
     
-    # 몬스터가 이미 죽었다면 턴 스킵
     if enemy['HP'] <= 0:
         return
         
     enemy_str = enemy['STR']
     
-    # 📌 몬스터 힘을 최대치로 하는 1 ~ STR 사이의 랜덤 피해량 적용
     damage = random.randint(1, enemy_str)
     st.session_state.stats['HP'] = max(0, st.session_state.stats['HP'] - damage)
     st.session_state.combat_log.append(f"**{enemy['name']}**이(가) 당신에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {st.session_state.stats['HP']})")
@@ -205,21 +203,26 @@ def end_combat(result):
     if result == "win":
         st.session_state.combat_log.append("🎉 **전투에서 승리했습니다!** 🎉")
         
-        # 📌 경험치 획득 로직
+        # 경험치 획득 로직
         exp_gain = st.session_state.enemy["EXP_REWARD"]
         st.session_state.exp += exp_gain
         st.session_state.combat_log.append(f"🌟 경험치 {exp_gain}을 획득했습니다! (총 {st.session_state.exp})")
         
-        # 임시 보상
-        reward = 5
-        st.session_state.inventory['밀'] += reward
-        st.session_state.combat_log.append(f"💰 보상: 밀 {reward}개를 획득했습니다.")
+        # 📌 명성 획득 로직
+        st.session_state.fame += 1
+        st.session_state.combat_log.append(f"👑 명성 +1을 획득했습니다! (총 {st.session_state.fame})")
+        
+        # 📌 슬라임의 점액 보상 로직
+        if st.session_state.enemy["type"] == "Slime":
+            item_name = st.session_state.enemy["ITEM_REWARD"]
+            item_count = get_slime_loot()
+            st.session_state.inventory[item_name] += item_count
+            st.session_state.combat_log.append(f"🧪 보상: {item_name} {item_count}개를 획득했습니다.")
         
     elif result == "lose":
         st.session_state.combat_log.append("💀 **전투에서 패배했습니다...** 💀")
         st.session_state.combat_log.append("당신은 정신을 잃고 마을로 돌아왔습니다.")
     
-    # 전투 종료 후 마을로 이동 (로그는 남겨둠)
     go_to_location('village')
 
 # -----------------
@@ -228,10 +231,11 @@ def end_combat(result):
 
 def character_setup_screen():
     """게임 시작 전 캐릭터 이름 설정을 위한 화면입니다."""
-    st.title("📜 중세 텍스트 RPG: 여정의 시작")
+    st.title("📜 감동적인 RPG: 여정의 시작") # 📌 타이틀 수정
     st.markdown("---")
-    st.header("당신의 이름을 입력하십시오.")
+    st.header("귀하의 이름을 입력해 주십시오.")
 
+    # 📌 이름 입력 필드: key를 사용하여 st.session_state에 직접 연결
     st.text_input("이름", 
                   key='player_name',
                   placeholder="예: 존, 마리아...")
@@ -249,7 +253,6 @@ def village_screen():
     
     st.write(f"**{st.session_state.player_name}** 님, 당신은 변변찮은 농노의 삶을 살고 있습니다. 주변에는 힘겹게 일하는 마을 사람들의 모습이 보입니다.")
     
-    # 이전 전투 로그 표시
     if st.session_state.combat_log:
         with st.expander("지난 모험 기록 보기"):
             for log in st.session_state.combat_log:
@@ -262,7 +265,6 @@ def village_screen():
     st.subheader("어디로 가시겠습니까?")
 
     st.button("🚜 농장으로 이동", on_click=go_to_location, args=('farm',), use_container_width=True)
-    # 던전 가기 버튼
     st.button("⚔️ 던전 가기", on_click=go_to_location, args=('dungeon_select',), use_container_width=True)
     st.button("🏠 집으로 돌아가기 (휴식)", disabled=True, use_container_width=True)
 
@@ -295,9 +297,8 @@ def dungeon_select_screen():
     
     st.markdown("---")
     
-    # 미약한 초원의 들판 던전
     if st.button("미약한 초원의 들판 (LV.1 슬라임 등장)", key='field_dungeon', use_container_width=True):
-        start_combat("Slime") # 슬라임과의 전투 시작
+        start_combat("Slime") 
         st.rerun() 
             
     st.markdown("---")
@@ -311,9 +312,8 @@ def combat_screen():
     st.title(f"🔥 전투 중: {enemy['name']}")
     st.markdown("---")
     
-    # 몬스터 상태 표시
-    st.subheader(f"몬스터: {enemy['name']} (HP: {enemy['HP']})")
-    # 체력바 표시
+    # 몬스터 상태 표시 (체력바는 편의 기능으로 유지)
+    st.subheader(f"몬스터: {enemy['name']}")
     hp_percent = (enemy['HP'] / enemy['MAX_HP']) if enemy['MAX_HP'] > 0 else 0
     st.progress(hp_percent, text=f"HP: {enemy['HP']} / {enemy['MAX_HP']}")
     st.text(f"힘(공격력): {enemy['STR']} | 민첩(공격속도): {enemy['DEX']}")
@@ -330,7 +330,6 @@ def combat_screen():
     # 플레이어 행동 선택
     st.subheader("당신의 행동")
     
-    # 공격 버튼: 공격 후 화면 갱신을 위해 st.rerun() 호출
     if st.button(f"⚔️ 공격 (피해량: 1~{st.session_state.stats['STR']})", use_container_width=True):
         player_attack()
         st.rerun()
@@ -347,13 +346,10 @@ def main_game_loop():
     """게임 상태 및 위치 상태에 따라 적절한 화면을 보여줍니다."""
     
     if st.session_state.game_started:
-        # 게임이 시작되면 사이드바(인벤토리 및 스탯)를 표시합니다.
         display_sidebar()
         
-        # 전투 중일 경우 가장 먼저 전투 화면을 표시
         if st.session_state.is_combat_active:
             combat_screen() 
-        # 그 외 위치에 따라 화면 분기
         elif st.session_state.location == 'village':
             village_screen()
         elif st.session_state.location == 'farm':
@@ -362,7 +358,6 @@ def main_game_loop():
             dungeon_select_screen()
 
     else:
-        # 게임이 시작되지 않았다면 캐릭터 설정 화면을 보여줍니다.
         character_setup_screen()
 
 # -----------------
