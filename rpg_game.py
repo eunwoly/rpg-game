@@ -1,5 +1,6 @@
 import streamlit as st
 import time
+import random
 from copy import deepcopy
 
 # -----------------
@@ -21,12 +22,19 @@ if 'inventory' not in st.session_state:
 # 📌 수정된 캐릭터 스탯 초기화
 if 'stats' not in st.session_state:
     st.session_state.stats = {
-        'HP': 10,   # 체력 (Health Points)
-        'STR': 3,   # 힘 (Strength) -> 3으로 변경
-        'MP': 5,    # 정신력 (Mental Power) -> 5로 변경
-        'MANA': 0,  # 마나 (Mana)
-        'DEX': 5    # 민첩 (DEX: 공격 속도) -> 5로 추가
+        'HP': 10,
+        'STR': 3,   # 힘 3으로 변경
+        'DEX': 5,   # 민첩 5 추가
+        'MP': 5,    # 정신력 5로 변경
+        'MANA': 0
     }
+    
+# 📌 레벨과 경험치 추가
+if 'level' not in st.session_state:
+    st.session_state.level = 1
+if 'exp' not in st.session_state:
+    st.session_state.exp = 0
+
 st.session_state.player_class = "농노 (Peasant)" 
 
 # 전투 상태 관련 변수 초기화
@@ -38,13 +46,14 @@ if 'combat_log' not in st.session_state:
     st.session_state.combat_log = []
 
 
-# 📌 몬스터 데이터 정의
+# 몬스터 데이터 정의
 ENEMIES = {
     "Slime": {
         "HP": 10,
-        "STR": 2,  # 공격력
+        "STR": 2,  # 공격력 (랜덤 대미지 최대치)
         "DEX": 3,  # 공격 속도
-        "NAME": "LV.1 슬라임"
+        "NAME": "LV.1 슬라임",
+        "EXP_REWARD": 1 # 📌 경험치 보상 추가
     }
 }
 
@@ -54,7 +63,8 @@ ENEMIES = {
 
 def start_game():
     """사용자가 '모험 시작' 버튼을 누르면 호출됩니다."""
-    if not st.session_state.player_name.strip():
+    # 📌 이름 출력 문제 해결을 위해 공백 체크를 더 엄격하게 유지
+    if not st.session_state.player_name or not st.session_state.player_name.strip():
         st.warning("캐릭터 이름을 입력해야 합니다.")
         return
     st.session_state.game_started = True
@@ -79,16 +89,19 @@ def display_sidebar():
     st.sidebar.title("캐릭터 정보")
     st.sidebar.text(f"이름: {st.session_state.player_name}")
     st.sidebar.text("신분: 농노")
+    # 📌 레벨과 경험치 추가
+    st.sidebar.text(f"레벨: {st.session_state.level}")
+    st.sidebar.text(f"경험치: {st.session_state.exp}")
     
     st.sidebar.markdown("---")
     
-    # 📌 캐릭터 스탯 표시 (민첩 추가)
+    # 📌 캐릭터 스탯 표시 (순서 변경 및 영어 제거)
     st.sidebar.subheader("능력치")
-    st.sidebar.text(f"체력 (HP): {st.session_state.stats['HP']}")
-    st.sidebar.text(f"힘 (STR): {st.session_state.stats['STR']}")
-    st.sidebar.text(f"정신력 (MP): {st.session_state.stats['MP']}")
-    st.sidebar.text(f"마나 (MANA): {st.session_state.stats['MANA']}")
-    st.sidebar.text(f"민첩 (DEX): {st.session_state.stats['DEX']}")
+    st.sidebar.text(f"체력: {st.session_state.stats['HP']}")
+    st.sidebar.text(f"힘: {st.session_state.stats['STR']}")
+    st.sidebar.text(f"민첩: {st.session_state.stats['DEX']}")
+    st.sidebar.text(f"정신력: {st.session_state.stats['MP']}")
+    st.sidebar.text(f"마나: {st.session_state.stats['MANA']}")
     
     st.sidebar.markdown("---")
     
@@ -103,9 +116,11 @@ def display_sidebar():
         st.session_state.player_name = ""
         st.session_state.location = 'village'
         st.session_state.inventory = {'밀': 0}
-        # 📌 스탯 초기화에도 변경된 값 및 민첩 반영
-        st.session_state.stats = {'HP': 10, 'STR': 3, 'MP': 5, 'MANA': 0, 'DEX': 5} 
-        st.session_state.is_combat_active = False # 전투 상태 초기화
+        st.session_state.stats = {'HP': 10, 'STR': 3, 'MP': 5, 'MANA': 0, 'DEX': 5}
+        # 📌 레벨과 경험치 초기화
+        st.session_state.level = 1
+        st.session_state.exp = 0
+        st.session_state.is_combat_active = False 
         st.session_state.enemy = None
         st.session_state.combat_log = []
         st.rerun()
@@ -127,12 +142,13 @@ def start_combat(enemy_type):
         "HP": enemy_base_stats["HP"],
         "STR": enemy_base_stats["STR"],
         "DEX": enemy_base_stats["DEX"],
-        "MAX_HP": enemy_base_stats["HP"]
+        "MAX_HP": enemy_base_stats["HP"],
+        "EXP_REWARD": enemy_base_stats["EXP_REWARD"]
     })
     
     st.session_state.combat_log = [f"**⚔️ {st.session_state.enemy['name']}**과의 전투가 시작되었습니다!"]
     
-    # 📌 선제 공격 판정
+    # 선제 공격 판정
     player_dex = st.session_state.stats['DEX']
     enemy_dex = st.session_state.enemy['DEX']
     
@@ -140,7 +156,6 @@ def start_combat(enemy_type):
         st.session_state.combat_log.append("당신의 민첩이 더 높아 선제 공격 권한을 얻었습니다! 먼저 행동하세요.")
     else:
         st.session_state.combat_log.append(f"{st.session_state.enemy['name']}의 민첩({enemy_dex})이 당신({player_dex})보다 높아 선제 공격을 시작합니다!")
-        # 몬스터가 먼저 공격할 경우, 즉시 몬스터의 턴 실행
         enemy_turn()
 
 def player_attack():
@@ -149,7 +164,8 @@ def player_attack():
     player_str = st.session_state.stats['STR']
     enemy = st.session_state.enemy
     
-    damage = player_str
+    # 📌 힘을 최대치로 하는 1 ~ STR 사이의 랜덤 피해량 적용
+    damage = random.randint(1, player_str)
     enemy['HP'] = max(0, enemy['HP'] - damage)
     st.session_state.combat_log.append(f"**{st.session_state.player_name}**이(가) **{enemy['name']}**에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {enemy['HP']})")
     
@@ -172,7 +188,8 @@ def enemy_turn():
         
     enemy_str = enemy['STR']
     
-    damage = enemy_str
+    # 📌 몬스터 힘을 최대치로 하는 1 ~ STR 사이의 랜덤 피해량 적용
+    damage = random.randint(1, enemy_str)
     st.session_state.stats['HP'] = max(0, st.session_state.stats['HP'] - damage)
     st.session_state.combat_log.append(f"**{enemy['name']}**이(가) 당신에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {st.session_state.stats['HP']})")
     
@@ -187,10 +204,17 @@ def end_combat(result):
     
     if result == "win":
         st.session_state.combat_log.append("🎉 **전투에서 승리했습니다!** 🎉")
+        
+        # 📌 경험치 획득 로직
+        exp_gain = st.session_state.enemy["EXP_REWARD"]
+        st.session_state.exp += exp_gain
+        st.session_state.combat_log.append(f"🌟 경험치 {exp_gain}을 획득했습니다! (총 {st.session_state.exp})")
+        
         # 임시 보상
         reward = 5
         st.session_state.inventory['밀'] += reward
         st.session_state.combat_log.append(f"💰 보상: 밀 {reward}개를 획득했습니다.")
+        
     elif result == "lose":
         st.session_state.combat_log.append("💀 **전투에서 패배했습니다...** 💀")
         st.session_state.combat_log.append("당신은 정신을 잃고 마을로 돌아왔습니다.")
@@ -209,7 +233,6 @@ def character_setup_screen():
     st.header("당신의 이름을 입력하십시오.")
 
     st.text_input("이름", 
-                  value=st.session_state.player_name,
                   key='player_name',
                   placeholder="예: 존, 마리아...")
 
@@ -226,7 +249,7 @@ def village_screen():
     
     st.write(f"**{st.session_state.player_name}** 님, 당신은 변변찮은 농노의 삶을 살고 있습니다. 주변에는 힘겹게 일하는 마을 사람들의 모습이 보입니다.")
     
-    # 📌 이전 전투 로그 표시
+    # 이전 전투 로그 표시
     if st.session_state.combat_log:
         with st.expander("지난 모험 기록 보기"):
             for log in st.session_state.combat_log:
@@ -239,7 +262,7 @@ def village_screen():
     st.subheader("어디로 가시겠습니까?")
 
     st.button("🚜 농장으로 이동", on_click=go_to_location, args=('farm',), use_container_width=True)
-    # 📌 던전 가기 버튼 추가
+    # 던전 가기 버튼
     st.button("⚔️ 던전 가기", on_click=go_to_location, args=('dungeon_select',), use_container_width=True)
     st.button("🏠 집으로 돌아가기 (휴식)", disabled=True, use_container_width=True)
 
@@ -272,7 +295,7 @@ def dungeon_select_screen():
     
     st.markdown("---")
     
-    # 📌 미약한 초원의 들판 던전
+    # 미약한 초원의 들판 던전
     if st.button("미약한 초원의 들판 (LV.1 슬라임 등장)", key='field_dungeon', use_container_width=True):
         start_combat("Slime") # 슬라임과의 전투 시작
         st.rerun() 
@@ -289,11 +312,11 @@ def combat_screen():
     st.markdown("---")
     
     # 몬스터 상태 표시
-    st.subheader(f"몬스터: {enemy['name']} (LV.1)")
+    st.subheader(f"몬스터: {enemy['name']} (HP: {enemy['HP']})")
     # 체력바 표시
     hp_percent = (enemy['HP'] / enemy['MAX_HP']) if enemy['MAX_HP'] > 0 else 0
-    st.progress(hp_percent, text=f"체력: {enemy['HP']} / {enemy['MAX_HP']}")
-    st.text(f"힘: {enemy['STR']} | 민첩: {enemy['DEX']}")
+    st.progress(hp_percent, text=f"HP: {enemy['HP']} / {enemy['MAX_HP']}")
+    st.text(f"힘(공격력): {enemy['STR']} | 민첩(공격속도): {enemy['DEX']}")
     
     st.markdown("---")
     
@@ -308,7 +331,7 @@ def combat_screen():
     st.subheader("당신의 행동")
     
     # 공격 버튼: 공격 후 화면 갱신을 위해 st.rerun() 호출
-    if st.button(f"⚔️ 공격 (힘: {st.session_state.stats['STR']})", use_container_width=True):
+    if st.button(f"⚔️ 공격 (피해량: 1~{st.session_state.stats['STR']})", use_container_width=True):
         player_attack()
         st.rerun()
 
