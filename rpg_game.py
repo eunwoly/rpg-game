@@ -64,14 +64,12 @@ ENEMIES = {
 
 def get_health_bar(current_hp, max_hp, length=10):
     """몬스터 체력을 이모지 막대바로 시각화합니다."""
-    # 체력이 0보다 작을 경우를 방지
     current_hp = max(0, current_hp) 
     
     percent = current_hp / max_hp
     filled_blocks = int(length * percent)
     empty_blocks = length - filled_blocks
     
-    # 체력 이모지 (녹색 막대)와 빈 이모지 (회색 막대) 사용
     bar = "🟢" * filled_blocks + "⚪" * empty_blocks
     return bar
 
@@ -140,7 +138,7 @@ def display_sidebar():
         
     st.sidebar.markdown("---")
     
-    # 📌 게임 초기화 버튼 (안정화된 방식: 초기값 명시적 재할당)
+    # 게임 초기화 버튼
     if st.sidebar.button("<< 게임 초기화"):
         st.session_state.game_started = False
         st.session_state.player_name = ""
@@ -188,8 +186,12 @@ def start_combat(enemy_type):
         enemy_turn()
 
 def player_attack():
-    """플레이어가 몬스터를 공격합니다."""
+    """플레이어가 몬스터를 공격합니다. 전투 중일 때만 실행됩니다."""
     
+    # 전투가 활성화되지 않았으면 즉시 종료
+    if not st.session_state.is_combat_active:
+        return 
+        
     player_str = st.session_state.stats['STR']
     enemy = st.session_state.enemy
     
@@ -197,14 +199,18 @@ def player_attack():
     enemy['HP'] = max(0, enemy['HP'] - damage)
     st.session_state.combat_log.append(f"**{st.session_state.player_name}**이(가) **{enemy['name']}**에게 **{damage}**의 피해를 입혔습니다. (남은 HP: {enemy['HP']})")
     
-    # 전투 승리 체크
+    # 📌 [수정] 전투 승리 체크: 승리 시 end_combat 호출 후 함수 종료
     if enemy['HP'] <= 0:
         end_combat("win")
+        # end_combat에서 위치가 변경되므로, 여기서 공격 함수를 완전히 종료합니다.
         return
     
     # 플레이어 공격 후, 몬스터 턴 실행
     enemy_turn()
-    
+    # 몬스터 턴 후, 플레이어가 죽었으면 추가 공격/턴을 막기 위해 함수 종료
+    if st.session_state.stats['HP'] <= 0:
+        return
+        
 def enemy_turn():
     """몬스터가 플레이어를 공격합니다."""
     
@@ -226,7 +232,8 @@ def enemy_turn():
 
 def end_combat(result):
     """전투를 종료하고 결과를 처리합니다."""
-    st.session_state.is_combat_active = False
+    # is_combat_active를 False로 설정하여 버튼이 비활성화되도록 유도
+    st.session_state.is_combat_active = False 
     
     if result == "win":
         st.session_state.combat_log.append("🎉 **전투에서 승리했습니다!** 🎉")
@@ -360,7 +367,9 @@ def combat_screen():
     # 플레이어 행동 선택
     st.subheader("당신의 행동")
     
-    if st.button(f"⚔️ 공격 (피해량: 1~{st.session_state.stats['STR']})", use_container_width=True):
+    is_active = st.session_state.is_combat_active
+    
+    if st.button(f"⚔️ 공격 (피해량: 1~{st.session_state.stats['STR']})", use_container_width=True, disabled=not is_active):
         player_attack()
         st.rerun()
 
